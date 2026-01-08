@@ -1,0 +1,17 @@
+services:
+
+  backend:
+    build: ./backend
+    container_name: aktywni-backend
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  web:
+    build: ./web
+    container_name: aktywni-web
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
