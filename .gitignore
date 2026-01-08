@@ -1,12 +1,16 @@
 # Node
 node_modules/
-npm-debug.log
+npm-debug.log*
 pnpm-lock.yaml
 yarn.lock
+yarn-debug.log*
+yarn-error.log*
 
 # Build / dist
 dist/
 build/
+
+# Logs
 *.log
 
 # Vite cache
@@ -16,14 +20,18 @@ build/
 *.pid
 *.pid.lock
 
+# Backup files
+*.bak
+
 # Editors
 .idea/
 .vscode/
 *.swp
 
-# Windows ADS metadata
-docker-compose.yml:Zone.Identifier
-
 # Env files
 .env
 .env.*
+
+# OS / metadata
+.DS_Store
+docker-compose.yml:Zone.Identifier
