@@ -35,3 +35,6 @@ build/
 # OS / metadata
 .DS_Store
 docker-compose.yml:Zone.Identifier
+
+*.bak.*
+*.bak
