@@ -67,6 +67,45 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// ===== REGISTER =====
+app.post('/api/register', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'email and password required' });
+    }
+
+    // sprawdzenie czy email zajęty
+    const [exists] = await pool.query(
+      'SELECT id FROM users WHERE email=? LIMIT 1',
+      [email]
+    );
+
+    if (exists.length) {
+      return res.status(409).json({ error: 'email already exists' });
+    }
+
+    // zapis usera (PLAINTEXT – zgodnie z loginem)
+    const [result] = await pool.query(
+      'INSERT INTO users (email, password, role) VALUES (?,?,?)',
+      [email, password, 'user']
+    );
+
+    res.status(201).json({
+      id: result.insertId,
+      email,
+      role: 'user',
+      token: 'user-token'
+    });
+
+  } catch (err) {
+    console.error('REGISTER error:', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+
 // ===== LOGIN =====
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body || {};
@@ -90,7 +129,7 @@ app.get('/api/activities', async (req, res) => {
   // opcjonalnie: ?userId=2
   const { userId } = req.query;
 
-  let sql = 'SELECT id, user_id, name, type, distance_km, duration_min, started_at FROM activities';
+  let sql = 'SELECT id, user_id, name, type, distance_km, duration_min, started_at, start_place, end_place FROM activities';
   const params = [];
 
   if (userId) {
@@ -108,7 +147,7 @@ app.get('/api/activities', async (req, res) => {
 app.get('/api/activities/:id', async (req, res) => {
   const id = Number(req.params.id);
   const [rows] = await pool.query(
-    'SELECT id, user_id, name, type, distance_km, duration_min, started_at FROM activities WHERE id=? LIMIT 1',
+    'SELECT id, user_id, name, type, distance_km, duration_min, started_at, start_place, end_place FROM activities WHERE id=? LIMIT 1',
     [id]
   );
   if (!rows.length) return res.status(404).json({ error: 'Activity not found' });
@@ -206,14 +245,15 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 
 // ===== ADMIN: ACTIVITIES + FILTERS =====
 app.get('/api/admin/activities', requireAdmin, async (req, res) => {
-  const { userId, type, minDistance, maxDistance, dateFrom, dateTo } = req.query;
+  const { userId, type, minDistance, maxDistance, dateFrom, dateTo, q } = req.query;
 
-  let sql = 'SELECT id, user_id, name, type, distance_km, duration_min, started_at FROM activities WHERE 1=1';
+  let sql = 'SELECT id, user_id, name, type, distance_km, duration_min, started_at, start_place, end_place FROM activities WHERE 1=1';
   const params = [];
 
   if (userId) { sql += ' AND user_id=?'; params.push(Number(userId)); }
   if (type) { sql += ' AND type=?'; params.push(String(type)); }
-  if (minDistance) { sql += ' AND distance_km>=?'; params.push(Number(minDistance)); }
+    if (q) { sql += " AND name LIKE ?"; params.push("%" + String(q) + "%"); }
+if (minDistance) { sql += ' AND distance_km>=?'; params.push(Number(minDistance)); }
   if (maxDistance) { sql += ' AND distance_km<=?'; params.push(Number(maxDistance)); }
 
   if (dateFrom) {
