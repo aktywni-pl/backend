@@ -6,11 +6,15 @@ const YAML = require("yamljs");
 
 const openapiDocument = YAML.load("./openapi.yaml");
 
+const passwordResetRoutes = require("./passwordReset.routes");
+
 const app = express();
 const PORT = 3000;
 
 app.use(cors());
 app.use(express.json());
+
+app.use((req,res,next)=>{ req.pool = pool; next(); });
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'admin-token';
 
@@ -46,6 +50,8 @@ async function initDbWithRetry() {
 
 // ===== SWAGGER =====
 app.use("/api/documentation", swaggerUi.serve, swaggerUi.setup(openapiDocument));
+
+app.use(passwordResetRoutes);
 
 // ===== ADMIN AUTH =====
 function requireAdmin(req, res, next) {
