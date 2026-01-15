@@ -3,6 +3,8 @@ const cors = require('cors');
 const mysql = require('mysql2/promise');
 const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
+const bcrypt = require("bcrypt");
+
 
 const openapiDocument = YAML.load("./openapi.yaml");
 
@@ -14,7 +16,7 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-app.use((req,res,next)=>{ req.pool = pool; next(); });
+
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'admin-token';
 
@@ -76,31 +78,55 @@ app.get('/api/health', async (req, res) => {
 // ===== REGISTER =====
 app.post('/api/register', async (req, res) => {
   try {
-    const { email, password } = req.body || {};
+    const { email, password, confirmPassword } = req.body || {};
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'email and password required' });
+    // 1) Wymagane pola
+    if (!email || !password || !confirmPassword) {
+      return res.status(400).json({ error: 'email, password and confirmPassword required' });
     }
 
-    // sprawdzenie czy email zajęty
+    // 2) Prosta walidacja email
+    const emailStr = String(email).trim().toLowerCase();
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr);
+    if (!emailOk) {
+      return res.status(400).json({ error: 'invalid email' });
+    }
+
+    // 3) Walidacja hasła
+    const passStr = String(password);
+    const confirmStr = String(confirmPassword);
+
+    if (passStr.length < 8) {
+      return res.status(400).json({ error: 'password must be at least 8 characters' });
+    }
+
+    if (passStr !== confirmStr) {
+      return res.status(400).json({ error: 'passwords do not match' });
+    }
+
+    // 4) Sprawdzenie czy email zajęty
     const [exists] = await pool.query(
       'SELECT id FROM users WHERE email=? LIMIT 1',
-      [email]
+      [emailStr]
     );
 
     if (exists.length) {
       return res.status(409).json({ error: 'email already exists' });
     }
 
-    // zapis usera (PLAINTEXT – zgodnie z loginem)
+    // 5) Hash hasła
+    const passwordHash = await bcrypt.hash(passStr, 10);
+
+    // 6) Zapis usera
     const [result] = await pool.query(
       'INSERT INTO users (email, password, role) VALUES (?,?,?)',
-      [email, password, 'user']
+      [emailStr, passwordHash, 'user']
     );
 
+    // 7) Odpowiedź
     res.status(201).json({
       id: result.insertId,
-      email,
+      email: emailStr,
       role: 'user',
       token: 'user-token'
     });
@@ -112,27 +138,8 @@ app.post('/api/register', async (req, res) => {
 });
 
 
-// ===== LOGIN =====
-app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body || {};
-  if (!email || !password) return res.status(400).json({ error: 'email and password required' });
-
-  const [rows] = await pool.query(
-    'SELECT id, email, role FROM users WHERE email=? AND password=? LIMIT 1',
-    [email, password]
-  );
-
-  if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
-
-  const user = rows[0];
-  const token = user.role === 'admin' ? ADMIN_TOKEN : 'user-token';
-
-  res.json({ id: user.id, email: user.email, role: user.role, token });
-});
-
 // ===== USER: LIST ACTIVITIES =====
 app.get('/api/activities', async (req, res) => {
-  // opcjonalnie: ?userId=2
   const { userId } = req.query;
 
   let sql = 'SELECT id, user_id, name, type, distance_km, duration_min, started_at, start_place, end_place FROM activities';
@@ -148,6 +155,52 @@ app.get('/api/activities', async (req, res) => {
   const [rows] = await pool.query(sql, params);
   res.json(rows);
 });
+
+
+// ===== LOGIN =====
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    return res.status(400).json({ error: 'email and password required' });
+  }
+
+  const emailStr = String(email).trim().toLowerCase();
+
+  const [rows] = await pool.query(
+    'SELECT id, email, role, password FROM users WHERE email=? LIMIT 1',
+    [emailStr]
+  );
+
+  if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
+
+  const user = rows[0];
+  const stored = String(user.password || '');
+
+  const looksLikeBcrypt =
+    stored.startsWith('$2a$') || stored.startsWith('$2b$') || stored.startsWith('$2y$');
+
+  let ok = false;
+
+  if (looksLikeBcrypt) {
+    ok = await bcrypt.compare(String(password), stored);
+  } else {
+    // stare plaintext
+    ok = String(password) === stored;
+
+    // upgrade do bcrypt po poprawnym logowaniu
+    if (ok) {
+      const newHash = await bcrypt.hash(String(password), 10);
+      await pool.query('UPDATE users SET password=? WHERE id=?', [newHash, user.id]);
+    }
+  }
+
+  if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+
+  const token = user.role === 'admin' ? ADMIN_TOKEN : 'user-token';
+  res.json({ id: user.id, email: user.email, role: user.role, token });
+});
+
+
 
 // ===== USER: DETAILS =====
 app.get('/api/activities/:id', async (req, res) => {
