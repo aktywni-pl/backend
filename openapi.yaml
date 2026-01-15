@@ -36,6 +36,119 @@ paths:
         '401':
           description: Błędne dane logowania
 
+  /api/register:
+    post:
+      summary: Rejestracja użytkownika
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: test@test.pl
+                password:
+                  type: string
+                  format: password
+                  example: Haslo123
+      responses:
+        '201':
+          description: Użytkownik utworzony
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 123
+                  email:
+                    type: string
+                    format: email
+                    example: test@test.pl
+                  role:
+                    type: string
+                    example: user
+                  token:
+                    type: string
+                    example: user-token
+        '400':
+          description: Brak email lub password
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: email and password required
+        '409':
+          description: Email już istnieje
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: email already exists
+        '500':
+          description: Błąd serwera
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: internal error
+
+  /api/password/forgot:
+    post:
+      summary: Żądanie resetu hasła
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Jeśli konto istnieje, wysłano instrukcje resetu
+        '400':
+          description: Błędne dane
+
+  /api/password/reset:
+    post:
+      summary: Ustawienie nowego hasła przy użyciu tokenu
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token:
+                  type: string
+                newPassword:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Hasło zostało zmienione
+        '400':
+          description: Token nieprawidłowy / wygasł / błędne dane
+
   /api/activities:
     get:
       summary: Lista aktywności użytkownika

@@ -1,0 +1,148 @@
+openapi: 3.0.3
+info:
+  title: Aktywni.pl API
+  description: REST API systemu monitorowania aktywności fizycznej
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000
+
+paths:
+
+  /api/health:
+    get:
+      summary: Sprawdzenie statusu API
+      responses:
+        '200':
+          description: API działa
+
+  /api/login:
+    post:
+      summary: Logowanie użytkownika lub administratora
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Poprawne logowanie
+        '401':
+          description: Błędne dane logowania
+
+  /api/activities:
+    get:
+      summary: Lista aktywności użytkownika
+      responses:
+        '200':
+          description: Lista aktywności
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Activity'
+
+  /api/activities/{id}/track:
+    get:
+      summary: Ślad GPS dla aktywności
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Track GPS
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Track'
+
+  /api/admin/users:
+    get:
+      summary: Lista użytkowników (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista użytkowników
+
+  /api/admin/activities:
+    get:
+      summary: Lista aktywności (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: userId
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista aktywności
+
+  /api/admin/stats:
+    get:
+      summary: Statystyki globalne (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Statystyki systemu
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: token
+
+  schemas:
+    Activity:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+        distance_km:
+          type: number
+        duration_min:
+          type: number
+        started_at:
+          type: string
+          format: date-time
+
+    Track:
+      type: object
+      properties:
+        activity_id:
+          type: integer
+        points:
+          type: array
+          items:
+            type: object
+            properties:
+              lat:
+                type: number
+              lon:
+                type: number
+              timestamp:
+                type: string
+                format: date-time
